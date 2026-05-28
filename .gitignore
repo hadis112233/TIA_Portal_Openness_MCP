@@ -2,6 +2,7 @@
 *.startup.log
 .vs/
 **/obj/
+**/obj-v20/
 **/bin/Debug/
 **/bin-v20/Debug/
 TiaMcp_Output/
