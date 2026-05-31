@@ -46,7 +46,6 @@ namespace TiaMcpServer.Siemens
         private readonly ILogger<Portal>? _logger;
         public string? LastAddDeviceError { get; private set; }
         public string? LastPlcGenError { get; private set; }
-        public string? LastHmiError { get; private set; }
         public string? LastConnectError { get; private set; }
         public string? LastImportError { get; private set; }
         public string? LastCompileError { get; private set; }
@@ -7443,56 +7442,52 @@ namespace TiaMcpServer.Siemens
             return TryListNamesFromCollection(connections, Array.Empty<string>(), "Connections");
         }
 
-        public bool ExportHmiScreen(string softwarePath, string screenName, string exportPath)
+        public void ExportHmiScreen(string softwarePath, string screenName, string exportPath)
         {
-            if (IsProjectNull()) return false;
+            if (IsProjectNull()) throw new PortalException(PortalErrorCode.InvalidState, "Project is null");
             var softwareContainer = GetSoftwareContainer(softwarePath);
-            if (softwareContainer?.Software == null) return false;
+            if (softwareContainer?.Software == null) throw new PortalException(PortalErrorCode.NotFound, $"HMI software not found: {softwarePath}");
 
             var screen = TryFindByNameInCollection(softwareContainer.Software, new[] { "Screens", "ScreenFolder" }, screenName);
-            if (screen == null) return false;
+            if (screen == null) throw new PortalException(PortalErrorCode.NotFound, $"HMI screen not found: {screenName}");
 
-            var ok = TryExportEngineeringObject(screen, exportPath, out var err);
-            LastHmiError = err;
-            return ok;
+            if (!TryExportEngineeringObject(screen, exportPath, out var err))
+                throw new PortalException(PortalErrorCode.ExportFailed, err ?? "HMI screen export failed");
         }
 
-        public bool ExportHmiTagTable(string softwarePath, string tagTableName, string exportPath)
+        public void ExportHmiTagTable(string softwarePath, string tagTableName, string exportPath)
         {
-            if (IsProjectNull()) return false;
+            if (IsProjectNull()) throw new PortalException(PortalErrorCode.InvalidState, "Project is null");
             var softwareContainer = GetSoftwareContainer(softwarePath);
-            if (softwareContainer?.Software == null) return false;
+            if (softwareContainer?.Software == null) throw new PortalException(PortalErrorCode.NotFound, $"HMI software not found: {softwarePath}");
 
             var sw = softwareContainer.Software;
             var table = TryFindHmiTagTable(sw, tagTableName);
-            if (table == null) return false;
+            if (table == null) throw new PortalException(PortalErrorCode.NotFound, $"HMI tag table not found: {tagTableName}");
 
-            var ok = TryExportEngineeringObject(table, exportPath, out var err);
-            LastHmiError = err;
-            return ok;
+            if (!TryExportEngineeringObject(table, exportPath, out var err))
+                throw new PortalException(PortalErrorCode.ExportFailed, err ?? "HMI tag table export failed");
         }
 
-        public bool ExportHmiConnection(string softwarePath, string connectionName, string exportPath)
+        public void ExportHmiConnection(string softwarePath, string connectionName, string exportPath)
         {
-            if (IsProjectNull()) return false;
+            if (IsProjectNull()) throw new PortalException(PortalErrorCode.InvalidState, "Project is null");
             var softwareContainer = GetSoftwareContainer(softwarePath);
-            if (softwareContainer?.Software == null) return false;
+            if (softwareContainer?.Software == null) throw new PortalException(PortalErrorCode.NotFound, $"HMI software not found: {softwarePath}");
 
             var sw = softwareContainer.Software;
             var connections = TryGetPropertyValue(sw, "Connections");
-            if (connections == null) return false;
+            if (connections == null) throw new PortalException(PortalErrorCode.NotFound, $"HMI Connections collection not found on '{softwarePath}'");
 
             var connection = FindExistingByName(connections, connectionName) ?? TryFindByNameInCollection(connections, Array.Empty<string>(), connectionName);
-            if (connection == null) return false;
+            if (connection == null) throw new PortalException(PortalErrorCode.NotFound, $"HMI connection not found: {connectionName}");
 
-            var ok = TryExportEngineeringObject(connection, exportPath, out var err);
-            LastHmiError = err;
-            return ok;
+            if (!TryExportEngineeringObject(connection, exportPath, out var err))
+                throw new PortalException(PortalErrorCode.ExportFailed, err ?? "HMI connection export failed");
         }
 
         public string ProbeClassicHmiConnectionCreation(string softwarePath, string connectionName, string exportPath)
         {
-            LastHmiError = null;
             var sb = new StringBuilder();
             if (IsProjectNull()) return "Project is null";
 
@@ -7532,14 +7527,12 @@ namespace TiaMcpServer.Siemens
                 else
                 {
                     sb.AppendLine("ExportExisting=FAIL :: " + existingExportErr);
-                    LastHmiError = existingExportErr;
                 }
                 return sb.ToString();
             }
 
             if (connectionType == null)
             {
-                LastHmiError = "Connection type not found";
                 sb.AppendLine("Create=SKIP :: connection type not found");
                 return sb.ToString();
             }
@@ -7592,7 +7585,6 @@ namespace TiaMcpServer.Siemens
             created ??= FindExistingByName(connections, connectionName) ?? TryFindByNameInCollection(connections, Array.Empty<string>(), connectionName);
             if (created == null)
             {
-                LastHmiError = createErr ?? "Connection was not created";
                 sb.AppendLine("Readback=FAIL :: connection not found after create attempts");
                 return sb.ToString();
             }
@@ -7604,7 +7596,6 @@ namespace TiaMcpServer.Siemens
             }
             else
             {
-                LastHmiError = exportErr;
                 sb.AppendLine("ExportCreated=FAIL :: " + exportErr);
             }
 
@@ -7627,8 +7618,8 @@ namespace TiaMcpServer.Siemens
                 {
                     var safe = MakeSafeFileName(s);
                     var outPath = Path.Combine(exportDir, $"screen_{safe}.xml");
-                    if (ExportHmiScreen(softwarePath, s, outPath)) exported.Add(outPath);
-                    else failed.Add($"screen:{s}");
+                    try { ExportHmiScreen(softwarePath, s, outPath); exported.Add(outPath); }
+                    catch (PortalException) { failed.Add($"screen:{s}"); }
                 }
             }
 
@@ -7639,8 +7630,8 @@ namespace TiaMcpServer.Siemens
                 {
                     var safe = MakeSafeFileName(t);
                     var outPath = Path.Combine(exportDir, $"tagtable_{safe}.xml");
-                    if (ExportHmiTagTable(softwarePath, t, outPath)) exported.Add(outPath);
-                    else failed.Add($"tagtable:{t}");
+                    try { ExportHmiTagTable(softwarePath, t, outPath); exported.Add(outPath); }
+                    catch (PortalException) { failed.Add($"tagtable:{t}"); }
                 }
             }
 

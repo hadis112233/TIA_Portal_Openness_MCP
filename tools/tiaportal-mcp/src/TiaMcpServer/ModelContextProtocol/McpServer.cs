@@ -3694,20 +3694,17 @@ namespace TiaMcpServer.ModelContextProtocol
         {
             try
             {
-                var ok = Portal.ExportHmiScreen(softwarePath, screenName, exportPath);
-                if (ok)
+                Portal.ExportHmiScreen(softwarePath, screenName, exportPath);
+                return new ResponseExportFile
                 {
-                    return new ResponseExportFile
-                    {
-                        Message = $"HMI screen '{screenName}' exported",
-                        ExportPath = exportPath,
-                        Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
-                    };
-                }
-
-                throw new McpException(
-                    $"Failed exporting HMI screen '{screenName}' from '{softwarePath}'. LastHmiError: {Portal.LastHmiError}",
-                    McpErrorCode.InternalError);
+                    Message = $"HMI screen '{screenName}' exported",
+                    ExportPath = exportPath,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed exporting HMI screen '{screenName}' from '{softwarePath}' [{pex.Code}]: {pex.Message}", pex, McpErrorCode.InternalError);
             }
             catch (Exception ex) when (ex is not McpException)
             {
@@ -3723,20 +3720,17 @@ namespace TiaMcpServer.ModelContextProtocol
         {
             try
             {
-                var ok = Portal.ExportHmiTagTable(softwarePath, tagTableName, exportPath);
-                if (ok)
+                Portal.ExportHmiTagTable(softwarePath, tagTableName, exportPath);
+                return new ResponseExportFile
                 {
-                    return new ResponseExportFile
-                    {
-                        Message = $"HMI tag table '{tagTableName}' exported",
-                        ExportPath = exportPath,
-                        Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
-                    };
-                }
-
-                throw new McpException(
-                    $"Failed exporting HMI tag table '{tagTableName}' from '{softwarePath}'. LastHmiError: {Portal.LastHmiError}",
-                    McpErrorCode.InternalError);
+                    Message = $"HMI tag table '{tagTableName}' exported",
+                    ExportPath = exportPath,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed exporting HMI tag table '{tagTableName}' from '{softwarePath}' [{pex.Code}]: {pex.Message}", pex, McpErrorCode.InternalError);
             }
             catch (Exception ex) when (ex is not McpException)
             {
@@ -3752,20 +3746,17 @@ namespace TiaMcpServer.ModelContextProtocol
         {
             try
             {
-                var ok = Portal.ExportHmiConnection(softwarePath, connectionName, exportPath);
-                if (ok)
+                Portal.ExportHmiConnection(softwarePath, connectionName, exportPath);
+                return new ResponseExportFile
                 {
-                    return new ResponseExportFile
-                    {
-                        Message = $"HMI connection '{connectionName}' exported",
-                        ExportPath = exportPath,
-                        Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
-                    };
-                }
-
-                throw new McpException(
-                    $"Failed exporting HMI connection '{connectionName}' from '{softwarePath}'. LastHmiError: {Portal.LastHmiError}",
-                    McpErrorCode.InternalError);
+                    Message = $"HMI connection '{connectionName}' exported",
+                    ExportPath = exportPath,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed exporting HMI connection '{connectionName}' from '{softwarePath}' [{pex.Code}]: {pex.Message}", pex, McpErrorCode.InternalError);
             }
             catch (Exception ex) when (ex is not McpException)
             {
