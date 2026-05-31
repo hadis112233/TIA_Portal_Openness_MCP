@@ -1,5 +1,30 @@
 # Change Log
 
+## [0.0.38] - 2026-05-31
+
+### PLC SCL 生成可靠性 — 消除「表达式被当成单变量名」这一类编译故障
+
+- **`StructuredTextXmlBuilder` 加 fail-fast 护栏**：`condition` / `assignment.source` / `line` 的 `{sym}` 经 `LocalVariable` 时校验合法 SCL 标识符，遇到含运算符/空格/括号的表达式（`RawMax <> RawMin`、`Setpoint - Actual`、`ABS(x)`、`Disable OR FaultLatch`）或布尔字面量 `TRUE`/`FALSE` **在离线 `dryRun` 阶段直接抛错**，不再静默生成「变量名含整段表达式」的错误 XML、拖到 TIA 编译期才暴露成 `Tag #"…" not defined`。全局（带引号）符号名不受影响。
+- **5 个含表达式/CASE/TON 的 FC/FB 模板改走外部 SCL**：`FC_BasicScaleLimit` / `FC_MathCompareDemo` / `FB_BasicLatch` / `FB_TimerCounterDemo` / `FB_StepSequenceDemo` 从 `plcbuild-json` DSL 改为 `scl-examples/*.scl` 原生源（`ImportPlcExternalSource` + `GenerateBlocksFromExternalSource`）；蓝图 `full_plc_hmi_project.json` 的 `objects`/`templateFiles`/`requiredBundleFiles`/`importOrder` 同步重写；旧 json 保留并标 `_deprecated`。新 `.scl` 文件加 UTF-8 BOM，避免含中文注释时按 GBK 误解码。
+
+### 在线安全红线 — 写强制工具不再 AI 可调用（破坏式）
+
+- **移除 `SetForceTableEntry` 的 MCP 工具暴露**（写强制会覆盖运行中 PLC 逻辑，不应由 AI 调用）；底层 `Portal` 能力保留，供 TIA 人工调试使用。工具数 **184 → 183**（L2 153 → 152）。
+- **收紧在线监视安全自检范围**：`RunOnlineMonitoringSafetySelfTest` 的 `safety.no-force-tools` 与对应单测改为允许只读 `Get*`（保留 `GetPlcForceTables` 列举只读），只对「写/执行强制」工具亮红线。消除了「shipped 自检工具报失败」与「force 工具暴露」之间的矛盾。
+
+### 文档/清单一致性
+
+- **修复 `tool-capability-matrix.md` 生成器**：旧产物每行工具名都是未展开的 `$(@{name=…}.name)`（历次发布均损坏）。新增 `scripts/Generate-ToolCapabilityMatrix.ps1` 从 `[McpServerTool]` 静态抽取（支持多行 Description 拼接），重生成为 183 行干净表。
+- `basic-plc-template-library.md` / `templates/plc/README.md` / `SKILL.md` §10 / `basic_plc_instruction_recipes.json`：统一「FC/FB 走外部 SCL、DSL 只接受单变量名」的口径，消除与蓝图的矛盾；`instruction-recipes` 修正 2 个指向已弃用 json 的 `plcBuildTemplate` 指针并加防陷阱规则。
+- `package-manifest.json` `bundleVersion` 由滞后的 `0.0.36` 修正为 `0.0.38`。
+- HMI `overview` 模板表头 `Symbolic`→`Absolute`，与绝对地址绑定策略一致。
+
+### 测试
+
+- 新增 SCL 护栏单测（4 类表达式输入均断言抛错）。
+- 修复 6 个过时离线单测：UDT builder 现要求 `$.name`（测试补名）；工具描述标签由旧约定（`[Plc/Build]`/`Hardware/Network`/`HmiUnified`）更新为现行 `[L2][Domain]`。
+- 重建 V20/V21 exe（0.0.38）。
+
 ## [0.0.37] - 2026-05-31
 
 ### 错误处理统一（E）— 消除 LastXxxError 侧信道，统一为 PortalException

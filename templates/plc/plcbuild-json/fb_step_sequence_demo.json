@@ -1,6 +1,7 @@
 {
   "kind": "fb",
   "tool": "PlcBuildAndImport",
+  "_deprecated": "已弃用：CASE 状态机 DSL 无法表达，且条件为表达式。改用 templates/plc/scl-examples/FB_StepSequenceDemo.scl 外部 SCL 导入。",
   "description": "通用步序状态机示例块，只表达基础 CASE/IF/复位/步号输出结构。",
   "json": {
     "blockName": "FB_StepSequenceDemo",

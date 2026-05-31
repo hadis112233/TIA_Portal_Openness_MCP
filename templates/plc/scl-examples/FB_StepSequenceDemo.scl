@@ -1,0 +1,47 @@
+﻿// 通用步序状态机示例块（原 fb_step_sequence_demo.json，CASE 状态机，DSL 无法表达，改走外部 SCL）。
+FUNCTION_BLOCK "FB_StepSequenceDemo"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT
+      Enable : Bool;
+      Next : Bool;
+      Reset : Bool;
+      ConditionOk : Bool;
+   END_VAR
+
+   VAR_OUTPUT
+      StepNo : Int;
+      Ready : Bool;
+      Busy : Bool;
+      Done : Bool;
+   END_VAR
+
+   VAR
+      State : Int;
+      LastNext : Bool;
+   END_VAR
+
+BEGIN
+   IF Reset OR NOT Enable THEN
+      State := 0;
+   ELSE
+      CASE State OF
+         0:
+            IF ConditionOk THEN State := 10; END_IF;
+         10:
+            IF Next AND NOT LastNext THEN State := 20; END_IF;
+         20:
+            IF Next AND NOT LastNext THEN State := 30; END_IF;
+         30:
+            IF NOT ConditionOk THEN State := 0; END_IF;
+      ELSE
+         State := 0;
+      END_CASE;
+   END_IF;
+
+   LastNext := Next;
+   StepNo := State;
+   Ready := (State = 0);
+   Busy := (State > 0) AND (State < 30);
+   Done := (State = 30);
+END_FUNCTION_BLOCK

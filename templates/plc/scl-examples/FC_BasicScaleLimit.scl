@@ -1,0 +1,27 @@
+﻿// 通用线性缩放与限幅块（原 fc_basic_scale_limit.json，改走外部 SCL）。
+FUNCTION "FC_BasicScaleLimit" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT
+      RawValue : Real;
+      RawMin : Real;
+      RawMax : Real;
+      EngMin : Real;
+      EngMax : Real;
+   END_VAR
+
+   VAR_OUTPUT
+      EngValue : Real;
+      Valid : Bool;
+   END_VAR
+
+BEGIN
+   IF RawMax <> RawMin THEN
+      EngValue := EngMin + ((RawValue - RawMin) * (EngMax - EngMin) / (RawMax - RawMin));
+      EngValue := LIMIT(MN := EngMin, IN := EngValue, MX := EngMax);
+      Valid := TRUE;
+   ELSE
+      EngValue := EngMin;
+      Valid := FALSE;
+   END_IF;
+END_FUNCTION

@@ -27,13 +27,13 @@
     "templates/plc/plcbuild-json/udt_basic_status.json",
     "templates/plc/plcbuild-json/db_basic_status.json",
     "templates/plc/plcbuild-json/db_hmi_interface.json",
-    "templates/plc/plcbuild-json/fb_basic_latch.json",
-    "templates/plc/plcbuild-json/fb_timer_counter_demo.json",
-    "templates/plc/plcbuild-json/fb_step_sequence_demo.json",
-    "templates/plc/plcbuild-json/fc_basic_scale_limit.json",
-    "templates/plc/plcbuild-json/fc_math_compare_demo.json",
     "templates/plc/lad-recipes/lad_call_recipes.json",
     "templates/plc/scl-examples/FC_InstructionGallery.scl",
+    "templates/plc/scl-examples/FC_BasicScaleLimit.scl",
+    "templates/plc/scl-examples/FC_MathCompareDemo.scl",
+    "templates/plc/scl-examples/FB_BasicLatch.scl",
+    "templates/plc/scl-examples/FB_TimerCounterDemo.scl",
+    "templates/plc/scl-examples/FB_StepSequenceDemo.scl",
     "templates/hmi/README.md",
     "templates/hmi/unified_overview_1280x800.json",
     "templates/hmi/unified_basic_dashboard_1024x768.json",
@@ -75,34 +75,23 @@
       "tagtable",
       "udt",
       "globaldb",
-      "fc",
-      "fb",
-      "ladRecipe",
       "externalSclExample",
+      "ladRecipe",
       "compile"
     ],
     "templateFiles": [
       "templates/plc/plcbuild-json/tagtable_basic_signals.json",
       "templates/plc/plcbuild-json/udt_basic_status.json",
       "templates/plc/plcbuild-json/db_basic_status.json",
-      "templates/plc/plcbuild-json/db_hmi_interface.json",
-      "templates/plc/plcbuild-json/fc_basic_scale_limit.json",
-      "templates/plc/plcbuild-json/fc_math_compare_demo.json",
-      "templates/plc/plcbuild-json/fb_basic_latch.json",
-      "templates/plc/plcbuild-json/fb_timer_counter_demo.json",
-      "templates/plc/plcbuild-json/fb_step_sequence_demo.json"
+      "templates/plc/plcbuild-json/db_hmi_interface.json"
     ],
     "objects": [
       { "kind": "tagtable", "source": "templates/plc/plcbuild-json/tagtable_basic_signals.json", "name": "Basic_Signals" },
       { "kind": "udt", "source": "templates/plc/plcbuild-json/udt_basic_status.json", "name": "UDT_BasicStatus" },
       { "kind": "globaldb", "source": "templates/plc/plcbuild-json/db_basic_status.json", "name": "DB_BasicStatus" },
-      { "kind": "globaldb", "source": "templates/plc/plcbuild-json/db_hmi_interface.json", "name": "DB_HMI_Interface" },
-      { "kind": "fc", "source": "templates/plc/plcbuild-json/fc_basic_scale_limit.json", "name": "FC_BasicScaleLimit" },
-      { "kind": "fc", "source": "templates/plc/plcbuild-json/fc_math_compare_demo.json", "name": "FC_MathCompareDemo" },
-      { "kind": "fb", "source": "templates/plc/plcbuild-json/fb_basic_latch.json", "name": "FB_BasicLatch" },
-      { "kind": "fb", "source": "templates/plc/plcbuild-json/fb_timer_counter_demo.json", "name": "FB_TimerCounterDemo" },
-      { "kind": "fb", "source": "templates/plc/plcbuild-json/fb_step_sequence_demo.json", "name": "FB_StepSequenceDemo" }
+      { "kind": "globaldb", "source": "templates/plc/plcbuild-json/db_hmi_interface.json", "name": "DB_HMI_Interface" }
     ],
+    "externalSclBlockNote": "FC_BasicScaleLimit / FC_MathCompareDemo / FB_BasicLatch / FB_TimerCounterDemo / FB_StepSequenceDemo 含算术/比较表达式、TON 与 CASE，超出 PlcBuildAndImport 单变量 DSL 能力，统一改走 externalSclExamples 原生 SCL（ImportPlcExternalSource + GenerateBlocksFromExternalSource）。旧 plcbuild-json/*.json 已弃用，勿再用其表达式写法。",
     "ladRecipes": [
       {
         "source": "templates/plc/lad-recipes/lad_call_recipes.json",
@@ -114,6 +103,31 @@
       {
         "source": "templates/plc/scl-examples/FC_InstructionGallery.scl",
         "usage": "SCL instruction reference. Prefer importing through a verified external-source path or use the equivalent PlcBuildAndImport templates."
+      },
+      {
+        "source": "templates/plc/scl-examples/FC_BasicScaleLimit.scl",
+        "name": "FC_BasicScaleLimit",
+        "usage": "线性缩放+限幅。ImportPlcExternalSource → GenerateBlocksFromExternalSource → CompileAndDiagnosePlc。"
+      },
+      {
+        "source": "templates/plc/scl-examples/FC_MathCompareDemo.scl",
+        "name": "FC_MathCompareDemo",
+        "usage": "数学/比较/限幅/质量位。走外部 SCL 导入，不走 DSL。"
+      },
+      {
+        "source": "templates/plc/scl-examples/FB_BasicLatch.scl",
+        "name": "FB_BasicLatch",
+        "usage": "启用/停止/故障/复位保持。布尔表达式条件，走外部 SCL。"
+      },
+      {
+        "source": "templates/plc/scl-examples/FB_TimerCounterDemo.scl",
+        "name": "FB_TimerCounterDemo",
+        "usage": "TON 定时器 + 计数器。多实例 TON 静态变量，走外部 SCL。"
+      },
+      {
+        "source": "templates/plc/scl-examples/FB_StepSequenceDemo.scl",
+        "name": "FB_StepSequenceDemo",
+        "usage": "CASE 步序状态机。DSL 无法表达 CASE，必须走外部 SCL。"
       }
     ],
     "compileTool": "CompileAndDiagnosePlc"

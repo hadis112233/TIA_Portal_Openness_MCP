@@ -21,30 +21,38 @@
 ## 推荐导入顺序
 
 ```text
-tagtable_basic_signals.json
-udt_basic_status.json
-db_basic_status.json
-db_hmi_interface.json
-fc_basic_scale_limit.json
-fc_math_compare_demo.json
-fb_basic_latch.json
-fb_timer_counter_demo.json
-fb_step_sequence_demo.json
-lad-recipes/lad_call_recipes.json
-scl-examples/FC_InstructionGallery.scl
+tagtable_basic_signals.json          (PlcBuildAndImport, tagtable)
+udt_basic_status.json                (PlcBuildAndImport, udt)
+db_basic_status.json                 (PlcBuildAndImport, globaldb)
+db_hmi_interface.json                (PlcBuildAndImport, globaldb)
+lad-recipes/lad_call_recipes.json    (BuildFlgNetCallXml)
+scl-examples/FC_InstructionGallery.scl   (外部 SCL 导入)
+scl-examples/FC_BasicScaleLimit.scl      (外部 SCL 导入)
+scl-examples/FC_MathCompareDemo.scl      (外部 SCL 导入)
+scl-examples/FB_BasicLatch.scl           (外部 SCL 导入)
+scl-examples/FB_TimerCounterDemo.scl     (外部 SCL 导入)
+scl-examples/FB_StepSequenceDemo.scl     (外部 SCL 导入)
 ```
 
-每个 `plcbuild-json/*.json` 文件都包含：
+> **FC/FB 一律走外部 SCL，不走 DSL。** `PlcBuildAndImport(kind=fc|fb)` 的 DSL 只接受
+> 单变量名的 `condition`/`source`，不能解析 `Setpoint - Actual`、`Disable OR FaultLatch`、
+> `ABS(...)`、`CASE` 等表达式（会编译报 `Tag not defined`）。因此含算术/比较/函数/CASE 的
+> FC/FB 改为 `scl-examples/*.scl` 原生源，经 `ImportPlcExternalSource` +
+> `GenerateBlocksFromExternalSource` 导入。旧 `plcbuild-json/fc_*.json`、`fb_*.json` 已弃用
+> （文件保留并标 `_deprecated`，勿再使用其表达式写法）。
+
+`plcbuild-json/*.json`（仅 tagtable/udt/globaldb）每个文件都包含：
 
 ```json
 {
-  "kind": "fc",
+  "kind": "globaldb",
   "tool": "PlcBuildAndImport",
   "json": {}
 }
 ```
 
-调用时把 `json` 字段序列化为字符串，传给 `PlcBuildAndImport`。
+调用时把 `json` 字段序列化为字符串，传给 `PlcBuildAndImport`。FC/FB 的 `.scl` 文件直接作为
+外部源导入，不需要序列化。
 
 ## 验收
 

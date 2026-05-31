@@ -7,7 +7,8 @@
     "只用于生成基础块、基础变量表、基础 DB 和基础 HMI 绑定对象。",
     "不要把 recipe 名称、变量名或注释替换成现场项目专有资料后再放回交付包。",
     "复杂 LAD/FBD 网络不要手写，使用 TIA 导出的已验证 XML 或 PlcBuildAndImport 生成。",
-    "任何写入先 dryRun，真实导入后编译。"
+    "任何写入先 dryRun，真实导入后编译。",
+    "neutralExample / callPattern / declarationPattern 里的 SCL 是【原生 SCL 文本】，用于写 scl-examples/*.scl 外部源或人工参考。绝不要把含运算符/函数/比较/CASE/FOR 的整行塞进 PlcBuildAndImport DSL 的 condition 或 source —— DSL 只接受单个变量名，否则编译报 Tag not defined。含表达式/CASE/FOR 的 FC/FB 一律走 ImportPlcExternalSource + GenerateBlocksFromExternalSource。"
   ],
   "recipes": [
     {
@@ -135,22 +136,23 @@
       "title": "基础置位/复位保持",
       "instructions": ["IF", "assignment", "Bool latch"],
       "useFor": ["通用状态保持", "通用命令保持"],
-      "plcBuildTemplate": "templates/plc/plcbuild-json/fb_basic_latch.json"
+      "externalSclTemplate": "templates/plc/scl-examples/FB_BasicLatch.scl"
     },
     {
       "id": "basic_scaling",
       "title": "基础线性缩放",
       "instructions": ["REAL arithmetic", "LIMIT"],
       "useFor": ["模拟量归一化", "HMI 显示值换算", "输出范围限制"],
-      "plcBuildTemplate": "templates/plc/plcbuild-json/fc_basic_scale_limit.json"
+      "externalSclTemplate": "templates/plc/scl-examples/FC_BasicScaleLimit.scl"
     }
   ],
   "mcpWorkflow": [
     "Bootstrap",
     "Connect",
     "GetProjectTree",
-    "PlcBuildAndImport(dryRun=true)",
-    "PlcBuildAndImport(dryRun=false)",
+    "PlcBuildAndImport(dryRun=true)  // 仅 tagtable/udt/globaldb",
+    "PlcBuildAndImport(dryRun=false) // 仅 tagtable/udt/globaldb",
+    "ImportPlcExternalSource + GenerateBlocksFromExternalSource // 含表达式/CASE/FOR 的 FC/FB（scl-examples/*.scl）",
     "CompileAndDiagnosePlc",
     "SaveProject"
   ]

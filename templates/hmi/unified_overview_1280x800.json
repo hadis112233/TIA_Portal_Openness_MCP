@@ -5,7 +5,7 @@
   "items": [
     { "type": "Rectangle", "name": "Header", "left": 0, "top": 0, "width": 1280, "height": 72, "properties": { "BackColor": "0xFF111827" } },
     { "type": "Text", "name": "Title", "left": 28, "top": 18, "width": 420, "height": 34, "text": "Plant Overview", "properties": { "ForeColor": "0xFFFFFFFF" }, "font": { "Size": 24 } },
-    { "type": "Text", "name": "HeaderStatus", "left": 980, "top": 24, "width": 260, "height": 22, "text": "Symbolic HMI tags → DB_HMI_Interface", "properties": { "ForeColor": "0xFFD1D5DB" }, "font": { "Size": 12 } },
+    { "type": "Text", "name": "HeaderStatus", "left": 980, "top": 24, "width": 260, "height": 22, "text": "Absolute HMI tags → DB_HMI_Interface", "properties": { "ForeColor": "0xFFD1D5DB" }, "font": { "Size": 12 } },
     { "type": "Rectangle", "name": "HeaderAccent", "left": 0, "top": 68, "width": 1280, "height": 4, "properties": { "BackColor": "0xFF3B82F6" } },
 
     { "type": "Rectangle", "name": "Nav", "left": 0, "top": 72, "width": 192, "height": 728, "properties": { "BackColor": "0xFF1F2937" } },

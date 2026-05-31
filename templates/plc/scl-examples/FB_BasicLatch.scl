@@ -1,0 +1,38 @@
+﻿// 通用启用/停止/故障/复位保持块（原 fb_basic_latch.json，改走外部 SCL）。
+FUNCTION_BLOCK "FB_BasicLatch"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT
+      Enable : Bool;
+      Disable : Bool;
+      FaultInput : Bool;
+      Reset : Bool;
+   END_VAR
+
+   VAR_OUTPUT
+      Active : Bool;
+      Fault : Bool;
+   END_VAR
+
+   VAR
+      ActiveLatch : Bool;
+      FaultLatch : Bool;
+   END_VAR
+
+BEGIN
+   IF FaultInput THEN
+      FaultLatch := TRUE;
+      ActiveLatch := FALSE;
+   ELSIF Reset THEN
+      FaultLatch := FALSE;
+   END_IF;
+
+   IF Disable OR FaultLatch THEN
+      ActiveLatch := FALSE;
+   ELSIF Enable AND NOT FaultLatch THEN
+      ActiveLatch := TRUE;
+   END_IF;
+
+   Active := ActiveLatch;
+   Fault := FaultLatch;
+END_FUNCTION_BLOCK

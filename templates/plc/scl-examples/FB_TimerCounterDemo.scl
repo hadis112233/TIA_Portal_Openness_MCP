@@ -1,0 +1,37 @@
+﻿// 通用定时器/计数器示例块（原 fb_timer_counter_demo.json，改走外部 SCL）。
+FUNCTION_BLOCK "FB_TimerCounterDemo"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT
+      Enable : Bool;
+      CountPulse : Bool;
+      Reset : Bool;
+      PresetCount : DInt;
+   END_VAR
+
+   VAR_OUTPUT
+      DelayedDone : Bool;
+      CounterDone : Bool;
+      CountValue : DInt;
+   END_VAR
+
+   VAR
+      LastCountPulse : Bool;
+      Counter : DInt;
+      OnDelay : TON;
+   END_VAR
+
+BEGIN
+   OnDelay(IN := Enable, PT := T#2s);
+   DelayedDone := OnDelay.Q;
+
+   IF Reset THEN
+      Counter := 0;
+   ELSIF CountPulse AND NOT LastCountPulse THEN
+      Counter := Counter + 1;
+   END_IF;
+
+   LastCountPulse := CountPulse;
+   CountValue := Counter;
+   CounterDone := Counter >= PresetCount;
+END_FUNCTION_BLOCK

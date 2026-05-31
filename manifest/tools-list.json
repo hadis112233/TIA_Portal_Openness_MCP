@@ -1991,17 +1991,6 @@
                       "description":  "[L2][Hardware]Set one exact DeviceItem attribute by name with type coercion and detailed error return. Use GetDeviceItemInfo/GetDeviceItemNetworkInfo first."
                   },
                   {
-                      "name":  "SetForceTableEntry",
-                      "layer":  "L2",
-                      "domain":  "PLC-Online",
-                      "method":  "",
-                      "returnType":  "",
-                      "parameters":  [
-
-                                     ],
-                      "description":  "[L2][Category:PLC-Online][ONLINE-WRITE][DANGER][PreCondition:Connect+OpenProject+GoOnline] Configure a force table entry to continuously force a PLC variable to a specific value while online. DANGER: Forcing overrides all PLC logic. The variable is held at the forced value regardless of program execution. Force is released when: TIA Portal goes offline, a new download is performed, or the CPU is power-cycled. This is an OFFLINE CONFIGURATION step — the force activates when TIA Portal is online. DO NOT force safety-relevant variables. Verify machine is safe before applying forces. Example: SetForceTableEntry(\u0027PLC_1\u0027, \u0027Debug_FT\u0027, \u0027DB1.DBX0.0\u0027, \u0027TRUE\u0027) To remove forces, delete the entry from the force table and reconnect."
-                  },
-                  {
                       "name":  "SetOpcUaInterfaceEnabled",
                       "layer":  "L2",
                       "domain":  "PLC-OpcUA",

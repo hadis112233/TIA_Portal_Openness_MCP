@@ -1,6 +1,7 @@
 {
   "kind": "fb",
   "tool": "PlcBuildAndImport",
+  "_deprecated": "已弃用：含 TON 调用与表达式条件，超出 DSL 能力。改用 templates/plc/scl-examples/FB_TimerCounterDemo.scl 外部 SCL 导入。",
   "description": "通用定时器/计数器示例块，展示 TON 与基本计数逻辑的 SCL 结构。",
   "json": {
     "blockName": "FB_TimerCounterDemo",

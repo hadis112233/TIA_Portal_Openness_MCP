@@ -449,17 +449,20 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 var toolNames = GetMcpToolNames();
                 var toolNameList = toolNames.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+                // Read-only getters (Get*) may legitimately reference force tables (e.g. GetPlcForceTables
+                // lists names). The safety red line is that no force-EXECUTION/WRITE tool is exposed.
                 var forbiddenToolNames = toolNameList
-                    .Where(x => x.IndexOf("Force", StringComparison.OrdinalIgnoreCase) >= 0)
+                    .Where(x => x.IndexOf("Force", StringComparison.OrdinalIgnoreCase) >= 0
+                             && !x.StartsWith("Get", StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
                 Add(
                     "safety.no-force-tools",
-                    "No force-related MCP tools exposed",
+                    "No force-write MCP tools exposed",
                     forbiddenToolNames.Count == 0,
                     forbiddenToolNames.Count == 0
-                        ? $"Checked {toolNameList.Count} MCP tools; no tool name contains Force."
-                        : "Forbidden tool names: " + string.Join(", ", forbiddenToolNames));
+                        ? $"Checked {toolNameList.Count} MCP tools; no force-write tool exposed (read-only force-table getters allowed)."
+                        : "Forbidden force-write tool names: " + string.Join(", ", forbiddenToolNames));
 
                 var requiredTools = new[]
                 {
@@ -4154,15 +4157,10 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "SetForceTableEntry"), Description(
-            "[L2][Category:PLC-Online][ONLINE-WRITE][DANGER][PreCondition:Connect+OpenProject+GoOnline]" +
-            " Configure a force table entry to continuously force a PLC variable to a specific value while online." +
-            " DANGER: Forcing overrides all PLC logic. The variable is held at the forced value regardless of program execution." +
-            " Force is released when: TIA Portal goes offline, a new download is performed, or the CPU is power-cycled." +
-            " This is an OFFLINE CONFIGURATION step — the force activates when TIA Portal is online." +
-            " DO NOT force safety-relevant variables. Verify machine is safe before applying forces." +
-            " Example: SetForceTableEntry('PLC_1', 'Debug_FT', 'DB1.DBX0.0', 'TRUE')" +
-            " To remove forces, delete the entry from the force table and reconnect.")]
+        // Force-write capability retained in the Portal layer but intentionally NOT exposed as an MCP tool:
+        // forcing overrides live PLC logic and must not be AI-invocable. Online monitoring stays read-only
+        // (see RunOnlineMonitoringSafetySelfTest / Test_OnlineMonitoringNoUnsafeToolNames). Use TIA Portal
+        // directly for commissioning forces. Removed from the tool surface in 0.0.38.
         public static ResponseMessage SetForceTableEntry(
             [Description("softwarePath: path to the PLC software, e.g. 'PLC_1'")] string softwarePath,
             [Description("tableName: name of the force table to configure (created if not existing)")] string tableName,

@@ -1,10 +1,10 @@
-{
+﻿{
   "schemaVersion": "2026-05-25",
-  "bundleVersion": "0.0.36",
+  "bundleVersion": "0.0.38",
   "packageName": "TIA_MCP_交付包_20260525_V20S7DCL_184330",
   "packageType": "tia-portal-mcp-complete-offline-delivery-bundle",
-  "generatedAt": "2026-05-25T18:43:30+08:00",
-  "refreshedAt": "2026-05-28T11:40:00+08:00",
+  "generatedAt": "2026-05-31T20:30:00+08:00",
+  "refreshedAt": "2026-05-31T20:30:00+08:00",
   "target": {
     "tiaPortalMajorVersion": [20, 21],
     "publicApiPathExample": "D:\\app\\TIA21\\Portal V21\\PublicAPI or D:\\app\\TIA20\\Portal V20\\PublicAPI",
@@ -51,17 +51,14 @@
     "bundleValidationScript": "scripts/Validate-Bundle.ps1"
   },
   "capabilities": {
-    "mcpToolCount": 184,
+    "mcpToolCount": 183,
     "mcpToolLayers": {
       "L0": 6,
       "L1": 29,
-      "L2": 153
+      "L2": 152
     },
     "removedToolsThisRelease": [
-      "ExportBlockAsScl",
-      "ExportBlocksAsScl",
-      "ImportBlockFromScl",
-      "ImportBlocksFromScl"
+      "SetForceTableEntry"
     ],
     "hmiTemplateJsonCount": 8,
     "plcTemplateJsonCount": 9,

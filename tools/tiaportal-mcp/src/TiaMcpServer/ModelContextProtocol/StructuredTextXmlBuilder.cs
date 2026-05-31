@@ -60,8 +60,11 @@ namespace TiaMcpServer.ModelContextProtocol
             if (components == null || components.Length == 0)
                 throw new ArgumentException("SCL 局部变量名不能为空。", nameof(components));
             foreach (var c in components)
+            {
                 if (string.IsNullOrWhiteSpace(c))
                     throw new ArgumentException("SCL 局部变量路径段不能为空。", nameof(components));
+                EnsureLocalSymbolSegment(c);
+            }
 
             _xml.Append("<Access Scope=\"LocalVariable\" UId=\"").Append(Next()).AppendLine("\">");
             _xml.Append("<Symbol UId=\"").Append(Next()).AppendLine("\">");
@@ -131,6 +134,31 @@ namespace TiaMcpServer.ModelContextProtocol
             if (hasQuote) return GlobalVariable(parts);
             if (parts.Length > 1) return LocalVariable(parts);
             return LocalVariable(stripped);
+        }
+
+        // 护栏：局部变量段必须是合法 SCL 标识符。condition / source / line 的 {sym} 全部经此校验，
+        // 把「整段表达式被当成单个变量名」的静默错误从 TIA 编译期提前到离线 dryRun 阶段。
+        // 全局（带引号）符号名允许空格/特殊字符，故只校验局部段，不在 GlobalVariable 调用。
+        private static void EnsureLocalSymbolSegment(string segment)
+        {
+            var s = segment.Trim();
+            bool valid = s.Length > 0 && (char.IsLetter(s[0]) || s[0] == '_');
+            for (var i = 1; valid && i < s.Length; i++)
+                if (!char.IsLetterOrDigit(s[i]) && s[i] != '_')
+                    valid = false;
+
+            if (!valid)
+                throw new ArgumentException(
+                    "SCL 局部符号非法：\"" + segment + "\"。它含运算符/空格/括号，看起来是表达式而非单个变量名。" +
+                    "condition / source / {sym} 只接受单个变量名；复杂表达式请用 op:\"line\" + items[]，" +
+                    "CASE/FOR/WHILE 或函数调用（ABS/LIMIT/TON 等）请走外部 SCL（ImportPlcExternalSource + GenerateBlocksFromExternalSource）。",
+                    nameof(segment));
+
+            if (string.Equals(s, "TRUE", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(s, "FALSE", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException(
+                    "SCL 布尔字面量 \"" + segment + "\" 不能作为符号。赋值请用 literalValue/value，行内请用 {lit:\"" + s.ToUpperInvariant() + "\"}。",
+                    nameof(segment));
         }
 
         public StructuredTextXmlBuilder LiteralConstant(string value)

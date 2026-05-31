@@ -615,13 +615,21 @@ DSL. Verified ops: `assignment`, `if`, `else`, `endif`, `line`, `token`,
 
 ### SCL DSL limits (known)
 
-- `if/elsif` `condition` accepts a **single boolean variable name** only — NOT
-  expressions like `Mode = 1`. For multi-variable conditions, fall back to
-  `op:"line"` (free-form token list, but it always appends `;` and newline,
-  so it can't emit standalone `IF cond THEN` headers).
+- `if/elsif` `condition` and `assignment` `source` accept a **single variable
+  name** only — NOT expressions like `Mode = 1`, `Setpoint - Actual`,
+  `Disable OR FaultLatch`, `ABS(x)`, or the literals `TRUE`/`FALSE`.
+  **The builder now hard-errors at build/`dryRun`** on such input (e.g.
+  `SCL 局部符号非法："RawMax <> RawMin"`) instead of silently emitting a
+  variable named after the whole expression — which used to slip through
+  `dryRun` and only blow up at TIA compile as `Tag #"…" not defined`.
+- For multi-variable conditions, fall back to `op:"line"` (free-form token
+  list, but it always appends `;` and newline, so it can't emit standalone
+  `IF cond THEN` headers).
 - `for`, `while`, `case`, `return`, `exit`, `continue`, `repeat` are NOT
-  supported by the DSL. For these, hand-write the `<StructuredText>` token AST
-  directly (or use a generic `op:"line"` chain — but the AST path is cleaner).
+  supported by the DSL. **Preferred path: write a native `.scl` and import via
+  `ImportPlcExternalSource` + `GenerateBlocksFromExternalSource` (§14)** — see
+  `templates/plc/scl-examples/*.scl` for ready FC/FB examples. (Hand-writing the
+  `<StructuredText>` token AST also works but is far more error-prone.)
 - `String`/`WString` outputs may compile-error in some safety standard groups;
   test with `dryRun=true` first.
 
