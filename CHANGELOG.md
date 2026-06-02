@@ -1,5 +1,16 @@
 # Change Log
 
+## [0.0.40] - 2026-06-02
+
+### 示例库质量 — SCL/UDT/DB 全面补注释并丰富逻辑
+
+- **5 个 `scl-examples/*.scl` 重写**：块头说明 + 每个 `VAR_INPUT/VAR_OUTPUT/VAR` 接口变量逐行中文注释 + 逻辑分区注释；`FB_TimerCounterDemo` 增运行/剩余/完成百分比输出并用静态累计器消除「输出未初始化」告警（编译 0 错 0 警）；`FB_BasicLatch` 增 `Healthy`；`FB_StepSequenceDemo` 增进度百分比；`FC_BasicScaleLimit`/`FC_MathCompareDemo` 增限幅/方向/偏差百分比输出。
+- **`udt_basic_status.json` / `db_basic_status.json`** 每个成员补 `commentZhCn` 中文注释（builder 早已支持）。
+
+### 仓库管理 — 编译产物移出 git 跟踪
+
+- `bin/Release`、`bin-v20/Release` 下的 exe/DLL/.config 不再入库（加入 `.gitignore`），二进制改由 GitHub Release zip 分发。消除「clean 误删 tracked 二进制 → MCP 启动崩溃」这一类停摆隐患。
+
 ## [0.0.39] - 2026-06-01
 
 ### Stability-first public project generation
