@@ -1,4 +1,4 @@
-# TIA Portal MCP 完整交付包（**v0.0.39** / V20+V21 + S7DCL）
+# TIA Portal MCP 完整交付包（**v1.0.0** / V20+V21 + S7DCL）
 
 [English](README.en.md) · **中文**
 
@@ -10,6 +10,14 @@
 
 在 **Windows + TIA Portal V20 或 V21** 下，通过 **MCP（stdio 或 HTTP）** 驱动博途：建项目、加硬件、生成 PLC（Tag/UDT/DB/SCL/LAD）、生成 **WinCC Unified** 画面与事件、编译诊断、保存。  
 包内含 **已编译运行时**、Skill、静态工具清单、能力矩阵、PLC/HMI 模板、**一键可读的项目蓝图**与手册。**不要求**另行克隆源码仓库。
+
+## v1.0.0 新功能（快、好用、不出错）
+
+- **默认 headless 启动，连接快 ~10×**：连 TIA 默认无界面（`WithoutUserInterface`），冷启动从约 200–340s 降到约 10–28s。要肉眼看博途时，启动 exe 加 `--with-ui`（或生成完直接打开 `.ap21`）。
+- **`ScaffoldProject` —— 一句话生成完整工程**：传一个 JSON `spec`，一次调用完成「建项目 → 加 PLC/HMI 硬件 → UDT/DB/标签表 → SCL/LAD 块 → 编译 → HMI 连接/画面/变量 → 保存」，返回逐步报告。把约 20 步的 runbook 收成一次调用。`dryRun=true` 可离线校验 spec 再真跑。现成模板见 `templates/project-blueprints/scaffold_spec_start_stop.json`（启停）、`scaffold_spec_motor.json`（电机）。
+- **常驻实例，会话秒连（可选）**：开一个终端跑 `python scripts/prewarm_tia.py` 挂着，之后每个会话 `Connect` 约 0.8–1s。
+- **更不易出错**：HMI 软件路径自动探测（不再写死 `HMI_RT_1`）；连接对挂死/孤儿 TIA 实例加超时跳过；单块导入（`ImportFromDocuments`/`ImportBlock`）导入后回读确认并返回 `Meta.verified`。
+- 工具收敛至 **180**（下线 4 个 `Export*ToTemp` 变体，并为易混的 Export/Import 工具补消歧描述）。
 
 **本次更新（相对 20260512 包）**
 

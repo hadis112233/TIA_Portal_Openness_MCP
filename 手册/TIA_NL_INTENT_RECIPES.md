@@ -142,7 +142,7 @@ Every recipe ends with a readback step and a clear success criterion.
 
 **成功判断**: CompileAndDiagnosePlc errors=0，GetBlockInfo 返回 IsConsistent=true
 
-**失败处理**: 编译报错 → ExportBlockToTemp 导出 → 检查 XML 接口定义 → 修正后重新 PlcBuildAndImport
+**失败处理**: 编译报错 → ExportBlock 导出到工作目录 → 检查 XML 接口定义 → 修正后重新 PlcBuildAndImport
 
 **Status**: `manual-derived`
 
@@ -317,7 +317,7 @@ Every recipe ends with a readback step and a clear success criterion.
    - errors=0, warnings>0 → 汇报警告内容，询问是否需要修复
    - errors>0 →
      a. 读取每条错误的 blockName 和 message
-     b. ExportBlockToTemp(softwarePath="PLC_1", blockPath=<报错块路径>)
+     b. ExportBlock(softwarePath="PLC_1", blockPath=<报错块路径>, exportPath=<工作目录>)
      c. 检查 XML 内容，定位接口/逻辑问题
      d. ComposePlcFbBlockXml / BuildPlcGlobalDbXml 修正
      e. ImportBlock(softwarePath="PLC_1", importPath=<修正后文件>)

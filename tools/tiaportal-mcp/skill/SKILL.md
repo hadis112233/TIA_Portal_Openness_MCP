@@ -26,6 +26,43 @@ Never guess paths. Never invent SCL/LAD XML. If a tool exists for the task, use
 it; otherwise inspect with `DescribeObject`/`DescribeService` first, then call
 `InvokeObject`/`InvokeService`.
 
+## 0.5 Fastest path — generate a whole project in ONE call (`ScaffoldProject`)
+
+When the user asks to **create/generate a complete project** (PLC + HMI, "做一个启停/电机/控制项目"), do **not** hand-orchestrate the 20-step runbook. Call **`ScaffoldProject`** once with a single JSON `spec`; it auto-connects, creates the project, adds PLC (+optional Unified HMI) hardware, builds UDTs/DBs/tag tables, imports SCL + LAD blocks, compiles, sets up the HMI connection/screens/tags, and saves — returning a per-step report with compile error counts. This is one model turn instead of twenty, and far less error-prone.
+
+**Ready-made specs** (copy, then replace `__BUNDLE__` with the bundle root absolute path; all blocks/HMI are verified to compile with 0 errors):
+
+```
+templates/project-blueprints/scaffold_spec_start_stop.json   启停控制 (PLC+HMI)
+templates/project-blueprints/scaffold_spec_motor.json        电机控制 (启停闭锁 + 速度标定 + HMI)
+```
+
+Minimal spec (everything else has defaults — only `projectName` is required):
+
+```json
+{ "projectName": "MyProj",
+  "plcName": "PLC_1", "plcFamily": "S7-1500",
+  "hmiName": "HMI_1", "hmiSoftwarePath": "HMI_RT_1",
+  "udt": [ { /* same json as PlcBuildAndImport kind=udt */ } ],
+  "globalDb": [ { /* kind=globaldb json */ } ],
+  "tagTable": [ { /* kind=tagtable json */ } ],
+  "sclSourceFiles": [ "C:\\bundle\\templates\\plc\\scl-examples\\FB_BasicLatch.scl" ],
+  "ladDocs": [ { "importPath": "C:\\bundle\\...\\skill\\lad-cookbook", "name": "MCPVerify_FC_LAD" } ],
+  "hmiScreens": [ { "screenName": "主画面", "width": 800, "height": 480, "designJson": { /* §6.3 schema */ } } ],
+  "hmiTags": [ { "tagTableName": "Default tag table", "tagName": "Tag_Run", "hmiDataType": "Bool", "address": "%DB100.DBX0.0" } ],
+  "compile": true, "save": true }
+```
+
+Notes:
+- Omit `hmiName` to skip all HMI. Omit any of `udt/globalDb/tagTable/sclSourceFiles/ladDocs/hmiScreens/hmiTags` to skip that part.
+- `udt/globalDb/tagTable` items are the **exact** json shapes from §6.2 (what `PlcBuildAndImport` accepts).
+- `designJson` is the §6.3 Unified HMI schema. Size the screen to the panel's native resolution (WinCC Unified PC default 800×480) or it will be clipped.
+- HMI tags: use an absolute PLC address (`%DB100.DBX0.0`, `%MD10`) so the binding read-back verifies.
+- Critical-step failures (connect/createProject/PLC device) abort and throw; per-element failures are collected in the returned `steps` so you can see exactly what to fix and re-run.
+- For per-session fast connects, keep a warm headless instance running (`_prewarm_tia.py`); see §0.
+
+Only fall back to the manual runbook (`docs/full-project-generation-runbook.md`) when the user needs something `ScaffoldProject` does not cover.
+
 ## 1. Tool layers
 
 The `Description` of every tool starts with one of three layer tags:
@@ -42,7 +79,7 @@ Core L0/L1 set:
 L0  Bootstrap, GetState, RunCapabilitySelfTest, RunOnlineMonitoringSafetySelfTest,
     GenerateAcceptanceReport, GenerateErrorReport
 L1  Connect, Disconnect, AttachToOpenProject, OpenProject, CreateProject,
-    SaveProject, CloseProject, GetProjectTree, GetSoftwareTree, GetSoftwareInfo,
+    ScaffoldProject, SaveProject, CloseProject, GetProjectTree, GetSoftwareTree, GetSoftwareInfo,
     PlcBuildAndImport, CompileSoftware, CompileAndDiagnosePlc,
     DownloadToPlc, CheckDownloadReadiness, GoOnline, GoOffline, GetOnlineState,
     EnsureOpennessUserGroup, ListPortalProcessProjects, GetProject,

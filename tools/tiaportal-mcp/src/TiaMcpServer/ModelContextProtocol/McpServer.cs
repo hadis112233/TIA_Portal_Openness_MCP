@@ -1099,6 +1099,224 @@ namespace TiaMcpServer.ModelContextProtocol
         // NOTE: Deprecated demo tool removed.
         // In V21, prefer importing block XML via ImportBlock/ImportBlocksFromDirectory, then CompileSoftware.
 
+        [McpServerTool(Name = "ScaffoldProject"), Description("[L1][Project] One-shot project generator: from a single JSON spec it creates the project, adds PLC (and optional Unified HMI) hardware, builds UDTs/global DBs/PLC tag tables, imports SCL external sources and LAD S7DCL documents, compiles, sets up the HMI connection/screens/tags, and saves — collapsing the ~20-step runbook into one call. Auto-connects if needed. Critical-step failures (connect/createProject/PLC device) abort; per-element failures are collected and reported. Spec keys: projectName(required); directoryPath?(default %TEMP%); plcName?(PLC_1); plcFamily?(S7-1500); plcMlfb?; hmiName?(omit to skip all HMI); hmiFamily?(WinCCUnifiedPC); hmiSoftwarePath?(HMI_RT_1); connectionName?(HMI_Connection_1); udt?/globalDb?/tagTable? = arrays of the same json objects PlcBuildAndImport accepts; sclSourceFiles? = array of .scl file paths; ladDocs? = array of {importPath,name}; hmiScreens? = array of {screenName,width,height,designJson(object)}; hmiTags? = array of {tagTableName?,tagName,hmiDataType?,plcTag?,address?}; compile?(true); save?(true). Returns a per-step report with compile error/warning counts. Pass dryRun=true to validate the spec offline (PLC block JSON shapes, SCL/LAD file paths, designJson) WITHOUT connecting to TIA or creating anything.")]
+        public static ResponseScaffold ScaffoldProject(
+            [Description("spec: JSON object describing the project to generate. See tool description for keys.")] string spec,
+            [Description("dryRun: true validates the spec offline (no TIA connection, nothing created). Use to pre-flight a spec before the real run.")] bool dryRun = false)
+        {
+            var resp = new ResponseScaffold { Ok = true };
+            void Step(string name, string status, string? detail = null)
+                => resp.Steps.Add(new ScaffoldStep { Step = name, Status = status, Detail = detail });
+
+            JsonNode root;
+            try { root = JsonNode.Parse(spec) ?? throw new Exception("spec parsed to null"); }
+            catch (Exception ex) { throw new McpException($"ScaffoldProject: invalid spec JSON: {ex.Message}", McpErrorCode.InvalidParams); }
+
+            string S(string key, string def = "") { try { return root[key]?.GetValue<string>() ?? def; } catch { return def; } }
+            bool B(string key, bool def) { try { return root[key] is JsonNode n ? n.GetValue<bool>() : def; } catch { return def; } }
+            JsonArray Arr(string key) => root[key] as JsonArray ?? new JsonArray();
+            string IS(JsonNode? n, string key, string def = "") { try { return n?[key]?.GetValue<string>() ?? def; } catch { return def; } }
+            uint IU(JsonNode? n, string key) { try { return (uint)(n?[key]?.GetValue<int>() ?? 0); } catch { return 0; } }
+
+            var projectName = S("projectName");
+            if (string.IsNullOrWhiteSpace(projectName))
+                throw new McpException("ScaffoldProject: 'projectName' is required", McpErrorCode.InvalidParams);
+            var directoryPath = S("directoryPath");
+            if (string.IsNullOrWhiteSpace(directoryPath))
+                directoryPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "tia_mcp_scaffold_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"));
+            var plcName = S("plcName", "PLC_1");
+            var plcFamily = S("plcFamily", "S7-1500");
+            var plcMlfb = S("plcMlfb");
+            var hmiName = S("hmiName");
+            var hmiFamily = S("hmiFamily", "WinCCUnifiedPC");
+            var hmiSoftwarePathSpec = S("hmiSoftwarePath"); // empty = auto-probe the real path after device add
+            var connectionName = S("connectionName", "HMI_Connection_1");
+            resp.ProjectName = projectName;
+            resp.DirectoryPath = directoryPath;
+
+            // ---- dryRun: offline spec validation only (no TIA connection, nothing created) ----
+            if (dryRun)
+            {
+                foreach (var pair in new[] { ("udt", "udt"), ("globalDb", "globaldb"), ("tagTable", "tagtable") })
+                    foreach (var item in Arr(pair.Item1))
+                    {
+                        try { PlcBuildAndImport(plcName, pair.Item2, item!.ToJsonString(), "", "", "", false, true); Step(pair.Item2, "ok", "dryRun: XML built"); }
+                        catch (Exception ex) { Step(pair.Item2, "failed", ex.Message); resp.Ok = false; }
+                    }
+                foreach (var item in Arr("sclSourceFiles"))
+                {
+                    string path; try { path = item?.GetValue<string>() ?? ""; } catch { path = ""; }
+                    if (string.IsNullOrWhiteSpace(path)) continue;
+                    bool exists = System.IO.File.Exists(path);
+                    Step("scl", exists ? "ok" : "failed", (exists ? "exists: " : "MISSING: ") + path); if (!exists) resp.Ok = false;
+                }
+                foreach (var item in Arr("ladDocs"))
+                {
+                    var importPath = IS(item, "importPath"); var name = IS(item, "name");
+                    bool exists = !string.IsNullOrWhiteSpace(importPath) && !string.IsNullOrWhiteSpace(name) && System.IO.File.Exists(System.IO.Path.Combine(importPath, name + ".s7dcl"));
+                    Step("lad", exists ? "ok" : "failed", exists ? $"{name} (.s7dcl found)" : $"MISSING .s7dcl under {importPath} for {name}"); if (!exists) resp.Ok = false;
+                }
+                foreach (var item in Arr("hmiScreens"))
+                {
+                    var screenName = IS(item, "screenName");
+                    bool ok = !string.IsNullOrWhiteSpace(screenName) && item?["designJson"] != null;
+                    Step("hmiScreen", ok ? "ok" : "failed", ok ? screenName : "missing screenName/designJson"); if (!ok) resp.Ok = false;
+                }
+                var okN = resp.Steps.Count(s => s.Status == "ok");
+                var failN = resp.Steps.Count(s => s.Status == "failed");
+                resp.Message = $"ScaffoldProject dryRun '{projectName}': {okN} ok, {failN} failed (offline validation, nothing created).";
+                resp.Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = resp.Ok, ["dryRun"] = true };
+                return resp;
+            }
+
+            // ---- critical: connect + create project + PLC device ----
+            try
+            {
+                if (!Portal.IsConnected()) { Connect(); Step("connect", "ok"); }
+                else Step("connect", "skipped", "already connected");
+            }
+            catch (Exception ex) { Step("connect", "failed", ex.Message); resp.Ok = false; throw new McpException($"ScaffoldProject aborted at connect: {ex.Message}", ex, McpErrorCode.InternalError); }
+
+            try { CreateProject(directoryPath, projectName); Step("createProject", "ok", directoryPath); }
+            catch (Exception ex) { Step("createProject", "failed", ex.Message); resp.Ok = false; throw new McpException($"ScaffoldProject aborted at createProject: {ex.Message}", ex, McpErrorCode.InternalError); }
+
+            try
+            {
+                var d = AddDeviceWithFallback(plcMlfb, "", plcName, plcFamily);
+                if (d.Ok == true) Step("addDevicePlc", "ok", $"{plcName} {d.MlfbUsed}");
+                else throw new McpException($"PLC device add failed: {d.Error}", McpErrorCode.InternalError);
+            }
+            catch (McpException) { Step("addDevicePlc", "failed", "see error"); resp.Ok = false; throw; }
+            catch (Exception ex) { Step("addDevicePlc", "failed", ex.Message); resp.Ok = false; throw new McpException($"ScaffoldProject aborted at addDevicePlc: {ex.Message}", ex, McpErrorCode.InternalError); }
+
+            // ---- optional HMI device ----
+            bool hmiRequested = !string.IsNullOrWhiteSpace(hmiName);
+            bool hmiDeviceOk = false;
+            if (hmiRequested)
+            {
+                try
+                {
+                    var d = AddDeviceWithFallback("", "", hmiName, hmiFamily);
+                    if (d.Ok == true) { hmiDeviceOk = true; Step("addDeviceHmi", "ok", $"{hmiName} {d.MlfbUsed}"); }
+                    else { Step("addDeviceHmi", "failed", d.Error); resp.Ok = false; }
+                }
+                catch (Exception ex) { Step("addDeviceHmi", "failed", ex.Message); resp.Ok = false; }
+            }
+
+            // ---- PLC elements (per-item collect) ----
+            void BuildList(string key, string kind)
+            {
+                foreach (var item in Arr(key))
+                {
+                    try { PlcBuildAndImport(plcName, kind, item!.ToJsonString(), "", "", "", false, false); Step(kind, "ok"); }
+                    catch (Exception ex) { Step(kind, "failed", ex.Message); resp.Ok = false; }
+                }
+            }
+            BuildList("udt", "udt");
+            BuildList("globalDb", "globaldb");
+            BuildList("tagTable", "tagtable");
+
+            // ---- SCL external sources ----
+            foreach (var item in Arr("sclSourceFiles"))
+            {
+                string path; try { path = item?.GetValue<string>() ?? ""; } catch { path = ""; }
+                if (string.IsNullOrWhiteSpace(path)) continue;
+                var srcName = System.IO.Path.GetFileName(path);
+                try { ImportPlcExternalSource(plcName, "", path); GenerateBlocksFromExternalSource(plcName, srcName); Step("scl", "ok", srcName); }
+                catch (Exception ex) { Step("scl", "failed", $"{srcName}: {ex.Message}"); resp.Ok = false; }
+            }
+
+            // ---- LAD via S7DCL documents ----
+            foreach (var item in Arr("ladDocs"))
+            {
+                var importPath = IS(item, "importPath");
+                var name = IS(item, "name");
+                if (string.IsNullOrWhiteSpace(importPath) || string.IsNullOrWhiteSpace(name)) { Step("lad", "skipped", "missing importPath/name"); continue; }
+                try { ImportFromDocuments(plcName, "", importPath, name); Step("lad", "ok", name); }
+                catch (Exception ex) { Step("lad", "failed", $"{name}: {ex.Message}"); resp.Ok = false; }
+            }
+
+            // ---- compile ----
+            if (B("compile", true))
+            {
+                try
+                {
+                    var c = CompileAndDiagnosePlc(plcName);
+                    resp.CompileState = c.State; resp.CompileErrorCount = c.ErrorCount; resp.CompileWarningCount = c.WarningCount;
+                    bool clean = (c.ErrorCount ?? 0) == 0;
+                    Step("compile", clean ? "ok" : "failed", $"state={c.State} errors={c.ErrorCount} warnings={c.WarningCount}");
+                    if (!clean) resp.Ok = false;
+                }
+                catch (Exception ex) { Step("compile", "failed", ex.Message); resp.Ok = false; }
+            }
+
+            // ---- HMI connection / screens / tags ----
+            if (hmiRequested && hmiDeviceOk)
+            {
+                // Resolve the real Unified HMI software path instead of assuming HMI_RT_1 — it varies
+                // with device naming. Probe candidates with GetHmiProgramInfo (first that succeeds wins).
+                string hmiPath = "";
+                var candidates = new List<string> { hmiSoftwarePathSpec, "HMI_RT_1", hmiName + ".HMI_RT_1", hmiName + "_RT_1", hmiName };
+                foreach (var c in candidates)
+                {
+                    if (string.IsNullOrWhiteSpace(c)) continue;
+                    try { GetHmiProgramInfo(c); hmiPath = c; break; } catch { }
+                }
+
+                if (string.IsNullOrWhiteSpace(hmiPath))
+                {
+                    Step("hmiResolve", "failed", $"could not resolve HMI software path (tried: {string.Join(", ", candidates.Where(x => !string.IsNullOrWhiteSpace(x)))})");
+                    resp.Ok = false;
+                }
+                else
+                {
+                    Step("hmiResolve", "ok", hmiPath);
+
+                    try { EnsureUnifiedHmiConnection(hmiPath, connectionName, plcName); Step("hmiConnection", "ok"); }
+                    catch (Exception ex) { Step("hmiConnection", "failed", ex.Message); resp.Ok = false; }
+
+                    foreach (var item in Arr("hmiScreens"))
+                    {
+                        var screenName = IS(item, "screenName");
+                        if (string.IsNullOrWhiteSpace(screenName)) continue;
+                        try
+                        {
+                            EnsureUnifiedHmiScreen(hmiPath, screenName, IU(item, "width"), IU(item, "height"));
+                            var design = item?["designJson"];
+                            if (design != null) ApplyUnifiedHmiScreenDesignJson(hmiPath, screenName, design.ToJsonString(), true);
+                            Step("hmiScreen", "ok", screenName);
+                        }
+                        catch (Exception ex) { Step("hmiScreen", "failed", $"{screenName}: {ex.Message}"); resp.Ok = false; }
+                    }
+
+                    foreach (var item in Arr("hmiTags"))
+                    {
+                        var tagName = IS(item, "tagName");
+                        if (string.IsNullOrWhiteSpace(tagName)) continue;
+                        var tagTable = IS(item, "tagTableName", "Default tag table");
+                        var dt = IS(item, "hmiDataType", "Bool");
+                        var plcTag = IS(item, "plcTag");
+                        var address = IS(item, "address");
+                        try { EnsureUnifiedHmiTag(hmiPath, tagTable, tagName, dt, plcName, plcTag, connectionName, address, true); Step("hmiTag", "ok", tagName); }
+                        catch (Exception ex) { Step("hmiTag", "failed", $"{tagName}: {ex.Message}"); resp.Ok = false; }
+                    }
+                }
+            }
+
+            // ---- save ----
+            if (B("save", true))
+            {
+                try { SaveProject(); Step("save", "ok"); }
+                catch (Exception ex) { Step("save", "failed", ex.Message); resp.Ok = false; }
+            }
+
+            var okCount = resp.Steps.Count(s => s.Status == "ok");
+            var failCount = resp.Steps.Count(s => s.Status == "failed");
+            resp.Message = $"ScaffoldProject '{projectName}': {okCount} ok, {failCount} failed; compile state={resp.CompileState ?? "(skipped)"} errors={resp.CompileErrorCount}.";
+            resp.Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = resp.Ok };
+            return resp;
+        }
+
         [McpServerTool(Name = "SaveProject"), Description("[L1][Project] Save the currently open project or session to disk. Requires: Connect + OpenProject. Call after any significant change (device add, block import, HMI edit). Compile first if there are pending changes to ensure consistency.")]
         public static ResponseSaveProject SaveProject()
         {
@@ -5759,7 +5977,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
 
 
-        [McpServerTool(Name = "ExportBlock"), Description("[L2][PLC-Software] Export one block to an XML file. Requires: Connect + OpenProject + block must be consistent (compile first if IsConsistent=false). blockPath must be fully qualified 'Group/Subgroup/Name' from GetSoftwareTree — bare names return InvalidParams with suggestions. For batch export use ExportBlocks.")]
+        [McpServerTool(Name = "ExportBlock"), Description("[L2][PLC-Software] Export one block to an XML file. Requires: Connect + OpenProject + block must be consistent (compile first if IsConsistent=false). blockPath must be fully qualified 'Group/Subgroup/Name' from GetSoftwareTree — bare names return InvalidParams with suggestions. Pick the right tool: batch → ExportBlocks; readable SCL/.s7dcl text → ExportAsDocuments.")]
         public static ResponseExportBlock ExportBlock(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("blockPath: full path to the block in the project structure, e.g. 'Group/Subgroup/Name' (single names are ambiguous)")] string blockPath,
@@ -5824,7 +6042,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportBlockToTemp"), Description("[L2][PLC-Software]Export one block to a temporary directory and return written file paths")]
+        // Un-exposed from MCP (tool consolidation): use ExportBlock with a caller-chosen directory. Method kept for internal use.
         public static ResponseTempExport ExportBlockToTemp(
             [Description("softwarePath: path to the PLC software")] string softwarePath,
             [Description("blockPath: full block path inside PLC software")] string blockPath,
@@ -5937,7 +6155,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 return string.Empty;
             }
         }
-        [McpServerTool(Name = "ImportBlock"), Description("[L1][PLC-Software] Import a single XML block file into PLC software. Requires: Connect + OpenProject. importPath must be an absolute path to a .xml file. After import, call CompileAndDiagnosePlc to verify. For multiple files use ImportBlocksFromDirectory; for JSON-built blocks use PlcBuildAndImport.")]
+        [McpServerTool(Name = "ImportBlock"), Description("[L1][PLC-Software] Import a single SimaticML XML block file into PLC software. Requires: Connect + OpenProject. importPath must be an absolute path to a .xml file. After import it reads back to confirm the block is present (Meta.verified); call CompileAndDiagnosePlc for full consistency. Pick the right tool: SCL/.s7dcl text → ImportFromDocuments; multiple XML files → ImportBlocksFromDirectory; a full exported program (UDTs+tags+blocks) → ImportPlcProgramFromDirectory; JSON-built blocks → PlcBuildAndImport.")]
         public static ResponseImportBlock ImportBlock(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("groupPath: defines the path in the project structure to the group, where to import the block")] string groupPath,
@@ -5946,13 +6164,32 @@ namespace TiaMcpServer.ModelContextProtocol
             try
             {
                 Portal.ImportBlock(softwarePath, groupPath, importPath);
+
+                // Read-back verification: confirm the block landed (name inferred from the XML file name).
+                bool verified = false;
+                string verifyDetail;
+                try
+                {
+                    var name = System.IO.Path.GetFileNameWithoutExtension(importPath);
+                    var escaped = Regex.Escape(name);
+                    var found = Portal.GetBlocks(softwarePath, $"^{escaped}$");
+                    if (found == null || found.Count == 0) found = Portal.GetBlocks(softwarePath, escaped);
+                    verified = found != null && found.Count > 0;
+                    verifyDetail = verified
+                        ? $"block '{name}' present after import"
+                        : $"block '{name}' NOT found after import (the XML's block name may differ from the file name)";
+                }
+                catch (Exception vex) { verifyDetail = "readback skipped: " + vex.Message; }
+
                 return new ResponseImportBlock
                 {
-                    Message = $"Block imported from '{importPath}' to '{groupPath}'",
+                    Message = $"Block imported from '{importPath}' to '{groupPath}'" + (verified ? " (verified)" : ""),
                     Meta = new JsonObject
                     {
                         ["timestamp"] = DateTime.Now,
-                        ["success"] = true
+                        ["success"] = true,
+                        ["verified"] = verified,
+                        ["verifyDetail"] = verifyDetail
                     }
                 };
             }
@@ -5967,7 +6204,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ImportBlocksFromDirectory"), Description("[L2][PLC-Software]Batch import PLC block .xml files from a directory into a block group (V21 recommended path)")]
+        [McpServerTool(Name = "ImportBlocksFromDirectory"), Description("[L2][PLC-Software] Batch import PLC block .xml (SimaticML) files from a directory into a block group. Pick the right tool: SCL/.s7dcl text → ImportBlocksFromDocuments; a full mixed program with UDTs+tag tables+blocks auto-ordered → ImportPlcProgramFromDirectory; a single XML file → ImportBlock.")]
         public static ResponseImportBatch ImportBlocksFromDirectory(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("groupPath: defines the path in the project structure to the group, where to import blocks")] string groupPath,
@@ -6334,7 +6571,7 @@ namespace TiaMcpServer.ModelContextProtocol
             };
         }
 
-        [McpServerTool(Name = "ExportBlocks"), Description("[L2][PLC-Software]Export all blocks from the plc software to path")]
+        [McpServerTool(Name = "ExportBlocks"), Description("[L2][PLC-Software] Export all (or regexName-filtered) blocks to a directory as SimaticML XML. Pick the right tool: readable SCL/.s7dcl text → ExportBlocksAsDocuments; a single block → ExportBlock.")]
         public static async Task<ResponseExportBlocks> ExportBlocks(
             IMcpServer server,
             RequestContext<CallToolRequestParams> context,
@@ -6529,7 +6766,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportBlocksToTemp"), Description("[L2][PLC-Software]Export blocks to a temporary directory and return written file paths")]
+        // Un-exposed from MCP (tool consolidation): use ExportBlocks with a caller-chosen directory. Method kept (used internally by CLI self-test).
         public static ResponseTempExport ExportBlocksToTemp(
             [Description("softwarePath: path to the PLC software")] string softwarePath,
             [Description("regexName: optional regex filter")] string regexName = "",
@@ -6709,7 +6946,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportTypeToTemp"), Description("[L2][PLC-Software]Export one type to a temporary directory and return written file paths")]
+        // Un-exposed from MCP (tool consolidation): use ExportType with a caller-chosen directory. Method kept for internal use.
         public static ResponseTempExport ExportTypeToTemp(
             [Description("softwarePath: path to the PLC software")] string softwarePath,
             [Description("typePath: full type path inside PLC software")] string typePath,
@@ -6976,7 +7213,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportTypesToTemp"), Description("[L2][PLC-Software]Export types to a temporary directory and return written file paths")]
+        // Un-exposed from MCP (tool consolidation): use ExportTypes with a caller-chosen directory. Method kept for internal use.
         public static ResponseTempExport ExportTypesToTemp(
             [Description("softwarePath: path to the PLC software")] string softwarePath,
             [Description("regexName: optional regex filter")] string regexName = "",
@@ -7213,7 +7450,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ImportFromDocuments"), Description("[L2][PLC-Software] PREFERRED on V21+ for importing one block. Imports a single program block from SIMATIC SD textual / SCL documents (.s7dcl + .s7res) into PLC software. Requires TIA Portal V20 or newer.")]
+        [McpServerTool(Name = "ImportFromDocuments"), Description("[L2][PLC-Software] PREFERRED on V21+ for importing one block. Imports a single program block from SIMATIC SD textual / SCL documents (.s7dcl + .s7res) into PLC software. Requires TIA Portal V20 or newer. After import it reads back to confirm the block is present (Meta.verified).")]
         public static ResponseImportFromDocuments ImportFromDocuments(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("groupPath: optional path within the PLC program where the block should be placed (empty for root)")] string groupPath,
@@ -7253,13 +7490,31 @@ namespace TiaMcpServer.ModelContextProtocol
                 var ok = Portal.ImportFromDocuments(softwarePath, groupPath, importPath, fileNameWithoutExtension, option);
                 if (ok)
                 {
+                    // Read-back verification: confirm the block is actually present after import.
+                    // Wrapped so a verification hiccup never masks a successful import.
+                    bool verified = false;
+                    string verifyDetail;
+                    try
+                    {
+                        var escaped = Regex.Escape(fileNameWithoutExtension);
+                        var found = Portal.GetBlocks(softwarePath, $"^{escaped}$");
+                        if (found == null || found.Count == 0) found = Portal.GetBlocks(softwarePath, escaped);
+                        verified = found != null && found.Count > 0;
+                        verifyDetail = verified
+                            ? $"block '{fileNameWithoutExtension}' present after import"
+                            : $"block '{fileNameWithoutExtension}' NOT found after import — check name/group";
+                    }
+                    catch (Exception vex) { verifyDetail = "readback skipped: " + vex.Message; }
+
                     return new ResponseImportFromDocuments
                     {
-                        Message = $"Imported '{fileNameWithoutExtension}' from '{importPath}'",
+                        Message = $"Imported '{fileNameWithoutExtension}' from '{importPath}'" + (verified ? " (verified)" : ""),
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,
                             ["success"] = true,
+                            ["verified"] = verified,
+                            ["verifyDetail"] = verifyDetail,
                             ["warnings"] = warnings
                         }
                     };

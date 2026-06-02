@@ -146,6 +146,30 @@ namespace TiaMcpServer.Siemens
 
         #region portal
 
+        // Attach to a portal process but never block longer than timeoutMs. An orphaned/dying
+        // Siemens.Automation.Portal (e.g. its controlling process was killed) can otherwise hang the
+        // COM Attach() call ~200s before throwing EngineeringSecurityException, stalling the whole
+        // connect. On timeout we return null so the caller skips this process and tries the next /
+        // launches a fresh instance. The worker thread is background and dies with the dead process.
+        private TiaPortal? AttachWithTimeout(TiaPortalProcess proc, int timeoutMs)
+        {
+            TiaPortal? result = null;
+            Exception? error = null;
+            var worker = new System.Threading.Thread(() =>
+            {
+                try { result = proc.Attach(); }
+                catch (Exception ex) { error = ex; }
+            }) { IsBackground = true };
+            worker.Start();
+            if (!worker.Join(timeoutMs))
+            {
+                _logger?.LogWarning($"Attach to TIA Portal PID={proc.Id} exceeded {timeoutMs}ms; skipping (likely orphaned/dying instance).");
+                return null;
+            }
+            if (error != null) throw error;
+            return result;
+        }
+
         public bool ConnectPortal()
         {
             _logger?.LogInformation("Connecting to TIA Portal...");
@@ -179,9 +203,9 @@ namespace TiaMcpServer.Siemens
                         try
                         {
                             _logger?.LogInformation($"Trying attach to TIA Portal process PID={proc.Id}");
-                            candidate = proc.Attach();
+                            candidate = AttachWithTimeout(proc, 30000);
                             _logger?.LogInformation(candidate == null
-                                ? $"Attach returned null for PID={proc.Id}"
+                                ? $"Attach returned null/timed out for PID={proc.Id} — skipping"
                                 : $"Attach succeeded for PID={proc.Id}");
                             if (candidate == null) continue;
 
@@ -250,9 +274,13 @@ namespace TiaMcpServer.Siemens
                     _logger?.LogInformation(LastConnectError);
                 }
 
-                // start new TIA Portal
-                _logger?.LogInformation("Starting a new TIA Portal instance with UI.");
-                _portal = new TiaPortal(TiaPortalMode.WithUserInterface);
+                // start new TIA Portal. Headless (WithoutUserInterface) is the default because it
+                // starts far faster than booting the full GUI; --with-ui flips it for visual inspection.
+                var launchMode = Engineering.LaunchWithUserInterface
+                    ? TiaPortalMode.WithUserInterface
+                    : TiaPortalMode.WithoutUserInterface;
+                _logger?.LogInformation($"Starting a new TIA Portal instance ({launchMode}).");
+                _portal = new TiaPortal(launchMode);
 
                 return true;
             }

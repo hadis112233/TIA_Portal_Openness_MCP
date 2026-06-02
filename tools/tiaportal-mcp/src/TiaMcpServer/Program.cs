@@ -88,6 +88,14 @@ namespace TiaMcpServer
                 // 这里只注册程序集解析器，不初始化 Openness，也不连接或打开 TIA 项目。
                 AppDomain.CurrentDomain.AssemblyResolve += Engineering.Resolver;
 
+                // Headless by default for fast startup; --with-ui launches the full GUI for inspection.
+                // Flag lives on Engineering (Siemens-free) so setting it here doesn't force the CLR to
+                // load the Portal type (its Siemens.Engineering fields) at Main's JIT time.
+                Engineering.LaunchWithUserInterface = options.PortalWithUserInterface;
+                LogDiag(options.PortalWithUserInterface
+                    ? "TIA Portal will launch WITH user interface (--with-ui); slower cold start."
+                    : "TIA Portal will launch headless (WithoutUserInterface) for faster startup; pass --with-ui to show the GUI.");
+
                 if (options.AnalyzeReferenceAssets)
                 {
                     RunAnalyzeReferenceAssets(options);

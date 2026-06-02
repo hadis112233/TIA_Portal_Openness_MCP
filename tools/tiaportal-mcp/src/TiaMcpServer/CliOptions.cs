@@ -110,6 +110,7 @@ namespace TiaMcpServer
         public string? ProjectDirectory { get; set; }
         public string? ProjectName { get; set; }
         public int? TiaStepTimeoutSeconds { get; set; }
+        public bool PortalWithUserInterface { get; set; } // --with-ui: launch TIA with full GUI (slower) instead of headless
 
         public static CliOptions ParseArgs(string[] args)
         {
@@ -715,6 +716,11 @@ namespace TiaMcpServer
                             options.TiaStepTimeoutSeconds = stepTimeoutSeconds;
                             i++;
                         }
+                        break;
+
+                    case "-with-ui":
+                    case "--with-ui":
+                        options.PortalWithUserInterface = true;
                         break;
 
                     case "--transport":

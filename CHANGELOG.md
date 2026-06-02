@@ -1,5 +1,29 @@
 # Change Log
 
+## [1.0.0] - 2026-06-02
+
+首个 1.0 大版本，聚焦「快、好用、不出错」。
+
+### 性能 — 启动从分钟级降到秒级
+
+- **默认 headless 启动**：连接 TIA 时默认 `WithoutUserInterface`，冷启动从约 200–340s 降到约 10–28s（实测全量回归 21/21 通过，含 WinCC Unified HMI）。需要可视化检查时加 CLI `--with-ui` 启动完整 GUI。
+- **常驻实例（可选）**：附带 `scripts/prewarm_tia.py`，保活一个 headless TIA 后，后续会话的 `Connect` 直接 attach，约 0.8–1s（实测并发 attach 可行）。
+
+### 新工具 — 一次调用生成完整工程
+
+- **`ScaffoldProject`**（L1）：单个 JSON spec 一步生成完整工程——自动连接 → 建项目 → 加 PLC（+可选 Unified HMI）硬件 → UDT/全局 DB/PLC 标签表 → 导入 SCL 外部源与 LAD（S7DCL）→ 编译 → HMI 连接/画面/变量 → 保存，返回逐步报告。把约 20 步的 runbook 收成一次调用。支持 `dryRun=true` 离线校验 spec（块 JSON 形状/SCL·LAD 文件/designJson）不连 TIA。
+- **现成 spec 模板**：`templates/project-blueprints/scaffold_spec_start_stop.json`（启停控制）、`scaffold_spec_motor.json`（电机控制），均用已验证构建块拼装、编译 0 错。SKILL.md 新增 §0.5 黄金路径。
+
+### 可靠性
+
+- **HMI 软件路径自动解析**：ScaffoldProject 不再写死 `HMI_RT_1`，按设备命名探测真实运行时路径。
+- **连接更稳**：`ConnectPortal` 给 attach 加 30s 上限，挂死/孤儿 TIA 实例从约 200s 卡死改为快速跳过并启动新实例。
+- **导入回读校验**：`ImportFromDocuments` 与 `ImportBlock` 导入后回读确认块已存在，返回 `Meta.verified`，便于自我纠错。
+
+### 工具收敛
+
+- 工具数 184 → **180**：下线 4 个 `Export*ToTemp` 便捷变体（改用基础导出工具 + 自选目录）；为易混的 Export/Import 工具补充「何时用本工具 vs 替代」消歧描述（XML ↔ SCL、单个 ↔ 批量 ↔ 整程序）。
+
 ## [0.0.40] - 2026-06-02
 
 ### 示例库质量 — SCL/UDT/DB 全面补注释并丰富逻辑

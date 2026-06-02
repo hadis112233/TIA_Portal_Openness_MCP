@@ -355,7 +355,7 @@ Steps:
 2. Review output:
    - errors=0 → success, continue.
    - errors>0 → read each error message; the block name and line number are included.
-     - Export the failing block with ExportBlockToTemp.
+     - Export the failing block with ExportBlock to a working directory.
      - Inspect the XML, correct the interface/logic.
      - ImportBlock the corrected file.
      - Repeat CompileAndDiagnosePlc.

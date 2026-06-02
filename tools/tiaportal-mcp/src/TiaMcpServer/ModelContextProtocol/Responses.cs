@@ -540,6 +540,24 @@ namespace TiaMcpServer.ModelContextProtocol
     {
     }
 
+    public class ScaffoldStep
+    {
+        public string? Step { get; set; }
+        public string? Status { get; set; } // ok | failed | skipped
+        public string? Detail { get; set; }
+    }
+
+    public class ResponseScaffold : ResponseMessage
+    {
+        public bool Ok { get; set; }
+        public string? ProjectName { get; set; }
+        public string? DirectoryPath { get; set; }
+        public string? CompileState { get; set; }
+        public int? CompileErrorCount { get; set; }
+        public int? CompileWarningCount { get; set; }
+        public List<ScaffoldStep> Steps { get; set; } = new List<ScaffoldStep>();
+    }
+
     public class ResponseImportBlocksFromDocuments : ResponseMessage
     {
         public IEnumerable<ResponseBlockInfo>? Items { get; set; }

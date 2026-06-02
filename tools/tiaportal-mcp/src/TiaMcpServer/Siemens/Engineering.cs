@@ -16,6 +16,12 @@ namespace TiaMcpServer.Siemens
         // Takes precedence over TiaPortalLocation env var and registry lookup.
         public static string? TiaPortalLocationOverride { get; set; }
 
+        // When true, launch TIA Portal with its full GUI (slower cold start, allows visual inspection).
+        // Default false = headless (WithoutUserInterface), which starts much faster. Set via --with-ui.
+        // Lives here (not on Portal) because Program.Main must set it without forcing the CLR to load the
+        // Portal type — Portal's Siemens.Engineering field types would be needed before Resolver is wired up.
+        public static bool LaunchWithUserInterface { get; set; } = false;
+
         public static Assembly? Resolver(object sender, ResolveEventArgs args)
         {
             var assemblyName = new AssemblyName(args.Name);
